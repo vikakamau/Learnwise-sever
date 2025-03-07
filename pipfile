@@ -1,0 +1,29 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask-sqlalchemy = "*"
+flask-migrate = "*"
+flask-cors = "*"
+gunicorn = "*"
+Faker = "14.2.0"
+sqlalchemy = "*"
+psycopg2-binary = "*"
+flask-restful = "*"
+python-dotenv = "*"
+flask-swagger-ui = "*"
+flask-jwt = "*"
+flask-bcrypt = "*"
+requests = "*"
+importlib-resources = "*"
+sqlalchemy-serializer = "*"
+flask-mail = "*"
+flask-jwt-extended = "==4.0.0"
+markupsafe = "==2.0.1"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"
