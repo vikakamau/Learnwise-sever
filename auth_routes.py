@@ -1,56 +1,70 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from .models import User, db
+from flask_cors import CORS
+from myapp.models import User, db
 
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint("auth", __name__)
 
-# Route for user signup
-@auth_bp.route('/signup', methods=['POST'])
+# ✅ Apply CORS globally with credentials support
+CORS(auth_bp, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+
+# CORS Preflight Handling
+@auth_bp.route("/<path:path>", methods=["OPTIONS"])
+def handle_options(path):
+    response = jsonify({"message": "CORS preflight OK"})
+    response.headers.update({
+        "Access-Control-Allow-Origin": "http://localhost:3000",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Credentials": "true"
+    })
+    return response
+
+# User Signup
+@auth_bp.route("/signup", methods=["POST"])
 def signup():
     data = request.get_json()
 
-    # Basic validation for required fields
-    if not data.get('username') or not data.get('email') or not data.get('password'):
+    if not data.get("username") or not data.get("email") or not data.get("password"):
         return jsonify({"message": "Missing required fields"}), 400
 
-    # Check if the username or email already exists
-    if User.query.filter_by(username=data['username']).first():
+    if User.query.filter_by(username=data["username"]).first():
         return jsonify({"message": "Username already exists"}), 400
 
-    if User.query.filter_by(email=data['email']).first():
+    if User.query.filter_by(email=data["email"]).first():
         return jsonify({"message": "Email already exists"}), 400
 
-    # Hash the password and create a new user
-    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
-    new_user = User(username=data['username'], email=data['email'], password_hash=hashed_password)
+    hashed_password = generate_password_hash(data["password"], method="pbkdf2:sha256")
+    new_user = User(username=data["username"], email=data["email"], password_hash=hashed_password)
 
-    # Save the user to the database
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({"message": "User registered successfully"}), 201
-@auth_bp.route('/login', methods=['POST'])
+    response = jsonify({"message": "User registered successfully"})
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    return response, 201
+
+
+# User Login
+@auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
-    print("Received login request:", data)  # Debug log
-    
-    if not data.get('identifier') or not data.get('password'):
+
+    if not data.get("username") or not data.get("password"):
         return jsonify({"message": "Missing username/email or password"}), 400
 
     user = User.query.filter(
-        (User.username == data['identifier']) | (User.email == data['identifier'])
+        (User.username == data["username"]) | (User.email == data["username"])
     ).first()
 
-    if not user:
-        return jsonify({"message": "User not found"}), 404
-
-    if not check_password_hash(user.password_hash, data['password']):
-        return jsonify({"message": "Invalid password"}), 401
+    # ✅ FIX: Ensure we use `user.password_hash`, not `user.password`
+    if not user or not check_password_hash(user.password_hash, data["password"]):
+        return jsonify({"message": "Invalid credentials"}), 401
 
     access_token = create_access_token(identity={"id": user.id, "username": user.username, "is_admin": user.is_admin})
 
-    return jsonify({
+    response = jsonify({
         "message": "Login successful",
         "access_token": access_token,
         "user": {
@@ -59,51 +73,62 @@ def login():
             "email": user.email,
             "is_admin": user.is_admin
         }
-    }), 200
+    })
+    
+    # ✅ Fix: Ensure credentials are allowed
+    response.headers.update({
+        "Access-Control-Allow-Origin": "http://localhost:3000",
+        "Access-Control-Allow-Credentials": "true"
+    })
+    return response, 200
 
 
-# Route to get the current user details (Protected)
-@auth_bp.route('/profile', methods=['GET'])
+# Get User Profile
+@auth_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
     current_user = get_jwt_identity()
-    
-    user = User.query.get(current_user['id'])
+    user = User.query.get(current_user["id"])
+
     if not user:
         return jsonify({"message": "User not found"}), 404
 
-    return jsonify({
+    response = jsonify({
         "id": user.id,
         "username": user.username,
         "email": user.email,
         "is_admin": user.is_admin
-    }), 200
+    })
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    return response, 200
 
-# Route for users to update their profile (Protected)
-@auth_bp.route('/profile', methods=['PUT'])
+# Update User Profile
+@auth_bp.route("/profile", methods=["PUT"])
 @jwt_required()
 def update_profile():
     current_user = get_jwt_identity()
-    user = User.query.get(current_user['id'])
+    user = User.query.get(current_user["id"])
 
     if not user:
         return jsonify({"message": "User not found"}), 404
 
     data = request.get_json()
-    user.username = data.get('username', user.username)
-    user.email = data.get('email', user.email)
+    user.username = data.get("username", user.username)
+    user.email = data.get("email", user.email)
 
-    # Optionally update the password
-    if data.get('password'):
-        user.password_hash = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    if data.get("password"):
+        user.password_hash = generate_password_hash(data["password"], method="pbkdf2:sha256")
 
     db.session.commit()
 
-    return jsonify({"message": "Profile updated successfully"}), 200
+    response = jsonify({"message": "Profile updated successfully"})
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    return response, 200
 
-# Route for user logout (if using JWT Blacklisting, optional)
-@auth_bp.route('/logout', methods=['POST'])
+# User Logout
+@auth_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
-    # Implement blacklisting if necessary, otherwise token expires automatically
-    return jsonify({"message": "Logout successful"}), 200
+    response = jsonify({"message": "Logout successful, clear token on client side."})
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    return response, 200
