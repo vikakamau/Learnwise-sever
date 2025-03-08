@@ -1,12 +1,14 @@
 from myapp import db
 
+
+db = SQlAlchemy()
 class User(db.Model):
     __tablename__= 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=true, nullable=False)
     password_hash = db.Column(db.String, nullable=False)
-    is_admin = db.Column(db.Boolean default=False)
+    is_admin = db.Column(db.Boolean, default=False)
     orders= db.relationship('order', backref='user')
 
     def to_dict(self):
@@ -43,8 +45,8 @@ class OrderItem(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
     project_name = db.Column(db.String(200), nullable=False)
     project_description = db.Column(db.String(500), nullable=False)
-    file_url= db.Column(db.String(255) nullable=True)
-    expected_duration = db.Column(db.String(20) nullable=False)
+    file_url= db.Column(db.String(255), nullable=True)
+    expected_duration = db.Column(db.String(20), nullable=False)
     project_budget = db.Column(db.Integer, nullable=False)
 
     def to_dict(self):
@@ -71,4 +73,3 @@ class Project(db.Model):
             "link_url": self.link_url,
             "file_url": self.file_url
             }
-            
