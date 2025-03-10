@@ -28,6 +28,7 @@ app.register_blueprint(auth_bp, url_prefix='/auth')
 
 # ------------------ ORDER ROUTES ------------------
 
+
 @app.route('/orders', methods=['POST'])
 def create_order():
     data = request.form
@@ -125,7 +126,6 @@ def delete_order_item(item_id):
         return jsonify({"error": str(e)}), 400
 
 # ------------------ PROJECT ROUTES (NO JWT REQUIRED) ------------------
-
 @app.route('/projects', methods=['POST'])
 def create_project():
     try:
@@ -133,10 +133,11 @@ def create_project():
         file = request.files.get('file')
 
         project_name = data.get('project_name')
+        project_type = data.get('project_type')
         link_url = data.get('link_url', '')
 
-        if not project_name:
-            return jsonify({"error": "Project name is required"}), 400
+        if not project_name or not project_type:
+            return jsonify({"error": "Project name and type are required"}), 400
 
         upload_folder = app.config['UPLOAD_FOLDER']
         os.makedirs(upload_folder, exist_ok=True)
@@ -150,6 +151,7 @@ def create_project():
 
         new_project = Project(
             project_name=project_name,
+            project_type=project_type,
             link_url=link_url,
             file_url=file_url
         )

@@ -71,6 +71,7 @@ class Project(db.Model):
     __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
     project_name = db.Column(db.String(100), nullable=False)
+    project_type = db.Column(db.String(100), nullable=False)
     link_url = db.Column(db.String(255), nullable=False)
     file_url = db.Column(db.String(255), nullable=True)
 
@@ -78,6 +79,7 @@ class Project(db.Model):
         return {
             "id": self.id,
             "project_name": self.project_name,
+            "project_type": self.project_type,
             "link_url": self.link_url,
             "file_url": self.file_url
         }

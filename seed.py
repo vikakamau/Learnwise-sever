@@ -101,11 +101,13 @@ def seed_data():
         print("Creating projects...")
         project1 = Project(
             project_name="E-commerce Platform",
+            project_type = "programming assistance",
             link_url="https://example.com",
             file_url=None
         )
         project2 = Project(
             project_name="Portfolio Website",
+            project_type = "project handling",
             link_url="https://portfolio.com",
             file_url=None
         )
