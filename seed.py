@@ -16,6 +16,21 @@ def seed_data():
     with app.app_context():
         db.create_all()  # Ensure tables exist
 
+
+        # Clear existing data to avoid foreign key violations
+        print("Clearing existing data...")
+        try:
+            db.session.query(OrderItem).delete()
+            db.session.query(Order).delete()
+            db.session.query(Project).delete() 
+            db.session.query(User).delete()
+            db.session.commit()
+            print("Existing data cleared.")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error clearing data: {e}")
+            return
+
         # Create Users
         print("Creating users...")
         users = [
