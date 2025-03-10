@@ -3,19 +3,16 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from myapp.models import db, User, Order, OrderItem, Project
 from auth_routes import auth_bp
+from werkzeug.utils import secure_filename
 import os
 
-
-
 app = Flask(__name__)
-
 
 # Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yourdatabase.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Change this to a strong secret key
 app.config['UPLOAD_FOLDER'] = 'uploads'  # Define a folder to store uploaded files
-
 
 # Initialize extensions
 db.init_app(app)
@@ -28,27 +25,34 @@ with app.app_context():
 
 # Register Blueprints
 app.register_blueprint(auth_bp, url_prefix='/auth')
+
+# ------------------ ORDER ROUTES ------------------
+
 @app.route('/orders', methods=['POST'])
 def create_order():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    data = request.form
+    file = request.files.get('file')
 
-    file = request.files['file']  # Get the uploaded file
-    data = request.form  # Use form data (not JSON)
+    required_fields = ['name', 'email', 'phone', 'project_name', 'project_description', 'expected_duration', 'project_budget', 'currency']
+    missing_fields = [field for field in required_fields if field not in data]
 
-    # Create a directory if it doesn’t exist
-    upload_folder = "uploads"
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder)
+    if missing_fields:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-    # Save file if uploaded
+    # Handle file upload
+    upload_folder = app.config['UPLOAD_FOLDER']
+    os.makedirs(upload_folder, exist_ok=True)
+
     file_url = None
     if file and file.filename:
-        file_path = os.path.join(upload_folder, file.filename)
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(upload_folder, filename)
         file.save(file_path)
-        file_url = file_path  # Save file path to the database
+        file_url = file_path
 
     try:
+        full_budget = f"{data['currency']} {data['project_budget']}"
+
         new_order = Order(
             user_id=data.get('user_id'),
             name=data['name'],
@@ -57,21 +61,18 @@ def create_order():
             project_name=data['project_name'],
             project_description=data['project_description'],
             expected_duration=data['expected_duration'],
-            project_budget=data['project_budget'],
-            file_url=file_url  # Save file path
+            project_budget=full_budget,
+            file_url=file_url
         )
+
         db.session.add(new_order)
         db.session.commit()
-        return jsonify(new_order.to_dict()), 201
+
+        return jsonify({"message": "Order created successfully", "order": new_order.to_dict()}), 201
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
-    
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    upload_folder = os.path.abspath(app.config['UPLOAD_FOLDER'])  # Ensure absolute path
-    return send_from_directory(upload_folder, filename)
-
 
 @app.route('/orders', methods=['GET'])
 def get_orders():
@@ -95,6 +96,7 @@ def delete_order(order_id):
         return jsonify({"error": str(e)}), 400
 
 # ------------------ ORDER ITEM ROUTES ------------------
+
 @app.route('/order_items', methods=['POST'])
 def create_order_item():
     data = request.json
@@ -122,19 +124,41 @@ def delete_order_item(item_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-# ------------------ PROJECT ROUTES ------------------
+# ------------------ PROJECT ROUTES (NO JWT REQUIRED) ------------------
+
 @app.route('/projects', methods=['POST'])
 def create_project():
-    data = request.json
     try:
+        data = request.form
+        file = request.files.get('file')
+
+        project_name = data.get('project_name')
+        link_url = data.get('link_url', '')
+
+        if not project_name:
+            return jsonify({"error": "Project name is required"}), 400
+
+        upload_folder = app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
+
+        file_url = None
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(upload_folder, filename)
+            file.save(file_path)
+            file_url = file_path
+
         new_project = Project(
-            project_name=data['project_name'],
-            link_url=data['link_url'],
-            file_url=data.get('file_url')
+            project_name=project_name,
+            link_url=link_url,
+            file_url=file_url
         )
+
         db.session.add(new_project)
         db.session.commit()
-        return jsonify(new_project.to_dict()), 201
+
+        return jsonify({"message": "Project created successfully", "project": new_project.to_dict()}), 201
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
@@ -144,16 +168,33 @@ def get_projects():
     projects = Project.query.all()
     return jsonify([project.to_dict() for project in projects]), 200
 
+@app.route('/projects/<int:project_id>', methods=['GET'])
+def get_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    return jsonify(project.to_dict()), 200
+
 @app.route('/projects/<int:project_id>', methods=['DELETE'])
 def delete_project(project_id):
     try:
         project = Project.query.get_or_404(project_id)
+
+        if project.file_url and os.path.exists(project.file_url):
+            os.remove(project.file_url)
+
         db.session.delete(project)
         db.session.commit()
-        return jsonify({"message": "Project deleted"}), 200
+        return jsonify({"message": "Project deleted successfully"}), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
+
+# ------------------ FILE UPLOAD ROUTE ------------------
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    upload_folder = os.path.abspath(app.config['UPLOAD_FOLDER'])
+    return send_from_directory(upload_folder, filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
