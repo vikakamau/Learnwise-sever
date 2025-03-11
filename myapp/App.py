@@ -17,12 +17,12 @@ app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Change this to a strong secr
 # Cloudinary configuration
 cloudinary.config(
     cloud_name='dfdqp6bdl',
-    api_key='322119454398727',
-    api_secret='yRGdFJRYQ9iaMi3Vm90enTrN5NI'
+    api_key='222362864812654',
+    api_secret='DQZ_MxjYcApRWybwlVz1ccSq92w'
 )
 
 # Upload preset name (replace with your actual preset name)
-UPLOAD_PRESET = 'learnwisee'
+UPLOAD_PRESET = 'learnwise'
 
 # Initialize extensions
 db.init_app(app)
@@ -55,6 +55,7 @@ def create_order():
             # Upload the file to Cloudinary with the upload preset
             upload_result = cloudinary.uploader.upload(
                 file,
+                resource_type='raw',
                 upload_preset=UPLOAD_PRESET  # Include the upload preset here
             )
             file_url = upload_result['secure_url']
@@ -107,49 +108,60 @@ def delete_order(order_id):
         return jsonify({"error": str(e)}), 400
 
 # ------------------ PROJECT ROUTES (NO JWT REQUIRED) ------------------
-
 @app.route('/projects', methods=['POST'])
 def create_project():
-    try:
-        data = request.form
-        file = request.files.get('file')
+    data = request.form
+    file = request.files.get('file')
 
-        project_name = data.get('project_name')
-        project_type = data.get('project_type')
-        link_url = data.get('link_url', '')
+    project_name = data.get('project_name')
+    project_type = data.get('project_type')
+    link_url = data.get('link_url', '')
 
-        if not project_name or not project_type:
-            return jsonify({"error": "Project name and type are required"}), 400
+    # Validate required fields
+    if not project_name or not project_type:
+        return jsonify({"error": "Project name and type are required"}), 400
 
-        file_url = None
-        if file and file.filename:
-            try:
-                # Upload the file to Cloudinary as a raw resource
-                upload_result = cloudinary.uploader.upload(
-                    file,
-                    resource_type='raw',  # Specify resource type as 'raw' for files
-                    upload_preset=UPLOAD_PRESET  # Include the upload preset here
-                )
-                file_url = upload_result['secure_url']
-            except Exception as e:
-                return jsonify({"error": f"File upload failed: {str(e)}"}), 500
+    # Validate that either a file or a link is provided
+    if not file and not link_url:
+        return jsonify({"error": "Please provide either a file or a link"}), 400
 
-        new_project = Project(
-            project_name=project_name,
-            project_type=project_type,
-            link_url=link_url,
-            file_url=file_url
-        )
+    file_url = None
+    if file and file.filename:
+        try:
+            # Upload the file to Cloudinary with the filename as the public ID
+            upload_result = cloudinary.uploader.upload(
+                file,
+                resource_type='raw',  # Ensure raw files are handled
+                public_id=file.filename.split('.')[0],  # Use filename as public ID
+                upload_preset=UPLOAD_PRESET  # Use your upload preset
+            )
+            file_url = upload_result['secure_url']
+        except Exception as e:
+            return jsonify({"error": f"File upload failed: {str(e)}"}), 500
 
-        db.session.add(new_project)
-        db.session.commit()
+    # Save the project to the database
+    new_project = Project(
+        project_name=project_name,
+        project_type=project_type,
+        link_url=link_url if not file_url else '',  # Only save link_url if no file is uploaded
+        file_url=file_url
+    )
 
-        return jsonify({"message": "Project created successfully", "project": new_project.to_dict()}), 201
+    db.session.add(new_project)
+    db.session.commit()
 
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
+    return jsonify({
+        "message": "Project created successfully",
+        "project": {
+            "id": new_project.id,
+            "project_name": new_project.project_name,
+            "project_type": new_project.project_type,
+            "link_url": new_project.link_url,
+            "file_url": new_project.file_url
+        }
+    }), 201
 
+    
 @app.route('/projects', methods=['GET'])
 def get_projects():
     projects = Project.query.all()
