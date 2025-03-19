@@ -1,7 +1,11 @@
 from flask import Flask, request, jsonify
+from flask_migrate import Migrate
+from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from myapp.models import db, User, Order, OrderItem, Project
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from auth_routes import auth_bp
 import cloudinary
 import cloudinary.uploader
@@ -24,10 +28,17 @@ cloudinary.config(
 # Upload preset name (replace with your actual preset name)
 UPLOAD_PRESET = 'learnwise'
 
+VALID_FILE_TYPES = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+}
+
 # Initialize extensions
 db.init_app(app)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 jwt = JWTManager(app)
+migrate = Migrate(app, db)
 
 # Ensure tables are created before running
 with app.app_context():
@@ -36,31 +47,100 @@ with app.app_context():
 # Register Blueprints
 app.register_blueprint(auth_bp, url_prefix='/auth')
 
+# Email configuration
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587
+EMAIL_ADDRESS = 'vikakamau72@gmail.com'
+EMAIL_PASSWORD = 'viktar04.'
+
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    try:
+        data = request.json
+        logging.debug(f"Received data: {data}")
+
+        # Extract form data
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        email = data.get('email')
+        message = data.get('message')
+
+        # Validate required fields
+        if not all([first_name, last_name, email, message]):
+            return jsonify({"error": "All fields are required"}), 400
+
+        # Create the email
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = EMAIL_ADDRESS
+        msg['Subject'] = f'New Contact Form Submission from {first_name} {last_name}'
+
+        body = f"""
+        Name: {first_name} {last_name}
+        Email: {email}
+        Message: {message}
+        """
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Send the email
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, msg.as_string())
+        server.quit()
+
+        return jsonify({'message': 'Email sent successfully!'}), 200
+
+    except smtplib.SMTPException as e:
+        logging.error(f"SMTP error: {e}")
+        return jsonify({'message': f'Failed to send email: {str(e)}'}), 500
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return jsonify({'message': f'An unexpected error occurred: {str(e)}'}), 500
+
+
 # ------------------ ORDER ROUTES ------------------
 
 @app.route('/orders', methods=['POST'])
 def create_order():
     data = request.form
     file = request.files.get('file')
-
+    link_url = data.get('link_url', '')
     required_fields = ['name', 'email', 'phone', 'project_name', 'project_description', 'expected_duration', 'project_budget', 'currency']
     missing_fields = [field for field in required_fields if field not in data]
 
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-    file_url = None
-    if file and file.filename:
+    # Validate that either a file or a link is provided
+    if not file and not link_url:
+        return jsonify({"error": "Please provide either a file or a link"}), 400
+
+    # Validate file type if a file is uploaded
+    if file:
+        file_type = file.content_type
+        if file_type not in VALID_FILE_TYPES:
+            return jsonify({"error": "Invalid file type. Only PDF and DOCX files are allowed."}), 400
+
+        # Optionally, you can also check the file extension
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[-1].lower()
+        if file_extension not in VALID_FILE_TYPES.values():
+            return jsonify({"error": "Invalid file extension. Only PDF and DOCX files are allowed."}), 400
+
+        # Proceed with file upload to Cloudinary or any other processing
         try:
-            # Upload the file to Cloudinary with the upload preset
             upload_result = cloudinary.uploader.upload(
                 file,
                 resource_type='raw',
-                upload_preset=UPLOAD_PRESET  # Include the upload preset here
+                public_id=filename,  # Use the original filename
+                upload_preset=UPLOAD_PRESET
             )
             file_url = upload_result['secure_url']
         except Exception as e:
             return jsonify({"error": f"File upload failed: {str(e)}"}), 500
+    else:
+        file_url = None
 
     try:
         full_budget = f"{data['currency']} {data['project_budget']}"
@@ -74,13 +154,28 @@ def create_order():
             project_description=data['project_description'],
             expected_duration=data['expected_duration'],
             project_budget=full_budget,
+            link_url=link_url if not file_url else '',
             file_url=file_url
         )
 
         db.session.add(new_order)
         db.session.commit()
 
-        return jsonify({"message": "Order created successfully", "order": new_order.to_dict()}), 201
+        return jsonify({
+            "message": "Order created successfully",
+            "order": {
+                "id": new_order.id,
+                "name": new_order.name,
+                "email": new_order.email,
+                "phone": new_order.phone,
+                "project_name": new_order.project_name,
+                "project_description": new_order.project_description,
+                "expected_duration": new_order.expected_duration,
+                "project_budget": new_order.project_budget,
+                "link_url": new_order.link_url,
+                "file_url": new_order.file_url
+            }
+        }), 201
 
     except Exception as e:
         db.session.rollback()
@@ -108,6 +203,7 @@ def delete_order(order_id):
         return jsonify({"error": str(e)}), 400
 
 # ------------------ PROJECT ROUTES (NO JWT REQUIRED) ------------------
+
 @app.route('/projects', methods=['POST'])
 def create_project():
     data = request.form
@@ -125,19 +221,31 @@ def create_project():
     if not file and not link_url:
         return jsonify({"error": "Please provide either a file or a link"}), 400
 
-    file_url = None
-    if file and file.filename:
+    # Validate file type if a file is uploaded
+    if file:
+        file_type = file.content_type
+        if file_type not in VALID_FILE_TYPES:
+            return jsonify({"error": "Invalid file type. Only PDF and DOCX files are allowed."}), 400
+
+        # Optionally, you can also check the file extension
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[-1].lower()
+        if file_extension not in VALID_FILE_TYPES.values():
+            return jsonify({"error": "Invalid file extension. Only PDF and DOCX files are allowed."}), 400
+
+        # Proceed with file upload to Cloudinary or any other processing
         try:
-            # Upload the file to Cloudinary with the filename as the public ID
             upload_result = cloudinary.uploader.upload(
                 file,
-                resource_type='raw',  # Ensure raw files are handled
-                public_id=file.filename.split('.')[0],  # Use filename as public ID
-                upload_preset=UPLOAD_PRESET  # Use your upload preset
+                resource_type='raw',
+                public_id=filename,  # Use the original filename
+                upload_preset=UPLOAD_PRESET
             )
             file_url = upload_result['secure_url']
         except Exception as e:
             return jsonify({"error": f"File upload failed: {str(e)}"}), 500
+    else:
+        file_url = None
 
     # Save the project to the database
     new_project = Project(
@@ -161,7 +269,6 @@ def create_project():
         }
     }), 201
 
-    
 @app.route('/projects', methods=['GET'])
 def get_projects():
     projects = Project.query.all()

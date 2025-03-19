@@ -32,6 +32,7 @@ class Order(db.Model):
     project_description = db.Column(db.String(500), nullable=False)
     expected_duration = db.Column(db.String(50), nullable=False)
     project_budget = db.Column(db.Integer, nullable=False)
+    link_url = db.Column(db.String(255), nullable=True)
     file_url = db.Column(db.String(255), nullable=True)
     
     order_items = db.relationship('OrderItem', backref='order', lazy=True, cascade="all, delete")
@@ -48,6 +49,7 @@ class Order(db.Model):
             "project_description": self.project_description,
             "expected_duration": self.expected_duration,
             "project_budget": self.project_budget,
+            "link_url": self.link_url,
             "file_url": self.file_url,
             "order_items": [item.to_dict() for item in self.order_items]
         }
