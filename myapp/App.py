@@ -3,7 +3,7 @@ from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from myapp.models import db, User, Order, OrderItem, Project
+from myapp.models import db, User, Order, Project
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 
 # Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yourdatabase.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://learnwise_83bm_user:EcLLbmj28dxHhlw1lBCEppV9YhNqbrhi@dpg-cvednjtsvqrc73f9qt1g-a.oregon-postgres.render.com/learnwise_83bm'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Change this to a strong secret key
 
@@ -131,18 +131,15 @@ def create_order():
     data = request.form
     file = request.files.get('file')
     link_url = data.get('link_url', '')
-    required_fields = ['name', 'email', 'phone', 'project_name', 'project_description', 'expected_duration', 'project_budget', 'currency']
+    required_fields = ['name', 'email', 'phone', 'project_name', 'project_description', 'expected_duration', 'currency', 'project_budget']
     missing_fields = [field for field in required_fields if field not in data]
-
 
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-
     # Validate that either a file or a link is provided
     if not file and not link_url:
         return jsonify({"error": "Please provide either a file or a link"}), 400
-
 
     # Validate file type if a file is uploaded
     if file:
@@ -150,13 +147,11 @@ def create_order():
         if file_type not in VALID_FILE_TYPES:
             return jsonify({"error": "Invalid file type. Only PDF and DOCX files are allowed."}), 400
 
-
         # Optionally, you can also check the file extension
         filename = secure_filename(file.filename)
         file_extension = filename.rsplit('.', 1)[-1].lower()
         if file_extension not in VALID_FILE_TYPES.values():
             return jsonify({"error": "Invalid file extension. Only PDF and DOCX files are allowed."}), 400
-
 
         # Proceed with file upload to Cloudinary or any other processing
         try:
@@ -172,13 +167,11 @@ def create_order():
     else:
         file_url = None
 
-
     try:
-        full_budget = f"{data['currency']} {data['project_budget']}"
-
+        project_budget = float(data['project_budget'])
+        currency = data['currency']
 
         new_order = Order(
-            user_id=data.get('user_id'),
             name=data['name'],
             email=data['email'],
             phone=data['phone'],
@@ -186,14 +179,13 @@ def create_order():
             project_description=data['project_description'],
             expected_duration=data['expected_duration'],
             project_budget=full_budget,
+            currency=currency,
             link_url=link_url if not file_url else '',
             file_url=file_url
         )
 
-
         db.session.add(new_order)
         db.session.commit()
-
 
         return jsonify({
             "message": "Order created successfully",
@@ -210,7 +202,6 @@ def create_order():
                 "file_url": new_order.file_url
             }
         }), 201
-
 
     except Exception as e:
         db.session.rollback()
