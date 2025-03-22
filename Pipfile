@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+cloudinary = "*"
 flask = "*"
 flask-cors = "*"
 flask-sqlalchemy = "*"

@@ -1,7 +1,7 @@
 pip==25.0.1
 
 
-
+cloudinary
 flask
 flask-cors
 flask-sqlalchemy
