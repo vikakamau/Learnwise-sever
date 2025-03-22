@@ -7,7 +7,7 @@ from myapp.models import User, db
 auth_bp = Blueprint("auth", __name__)
 
 # ✅ Apply CORS globally with credentials support
-CORS(auth_bp, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": ["https://dickson4954.github.io", "http://localhost:3000"]}}, supports_credentials=True)
 
 # CORS Preflight Handling
 @auth_bp.route("/<path:path>", methods=["OPTIONS"])
