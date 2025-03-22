@@ -2,21 +2,21 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from myapp.models import db, User, Order, Project
 from flask import Flask
+from datetime import datetime
 
 app = Flask(__name__)
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://learnwise_83bm_user:EcLLbmj28dxHhlw1lBCEppV9YhNqbrhi@dpg-cvednjtsvqrc73f9qt1g-a.oregon-postgres.render.com/learnwise_83bm'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://learnwise_0h5s_user:2amNOFbX8dHHVvQuWu33ytJMkuz5XXnc@dpg-cveo2hjv2p9s73dorbig-a.oregon-postgres.render.com/learnwise_0h5s'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# Seed data
 def seed_data():
     with app.app_context():
-        db.create_all()  # Ensure tables exist
+        db.create_all()
 
-        # Clear existing data to avoid foreign key violations
+        # Clear existing data in the correct order
         print("Clearing existing data...")
         try:
             db.session.query(Order).delete()
@@ -47,71 +47,57 @@ def seed_data():
         db.session.commit()
         print("Users created.")
 
-        # Fetch actual user IDs
-        admin_user = User.query.filter_by(username="admin").first()
-        john_user = User.query.filter_by(username="john_doe").first()
-        jane_user = User.query.filter_by(username="jane_doe").first()
-
         # Create Orders
         print("Creating orders...")
-        order1 = Order(
-            name="John Order",
-            email="john@example.com",
-            phone="1234567890",
-            project_name="Website Development",
-            project_description="A full-stack web project",
-            expected_duration="2 weeks",
-            project_budget=500,
-            currency="USD"
-        )
-        order2 = Order(
-            name="Jane Order",
-            email="jane@example.com",
-            phone="0987654321",
-            project_name="Mobile App",
-            project_description="A cross-platform app",
-            expected_duration="1 month",
-            project_budget=1000,
-            currency="USD"
-        )
+        orders = [
+            Order(
+                name="John Order",
+                email="john@example.com",
+                phone="1234567890",
+                project_name="Website Development",
+                project_description="A full-stack web project",
+                expected_duration="2 weeks",
+                project_budget=500,
+                currency="USD"
+            ),
+            Order(
+                name="Jane Order",
+                email="jane@example.com",
+                phone="0987654321",
+                project_name="Mobile App",
+                project_description="A cross-platform app",
+                expected_duration="1 month",
+                project_budget=1000,
+                currency="USD"
+            )
+        ]
 
-        db.session.add_all([order1, order2])
+        db.session.add_all(orders)
         db.session.commit()
         print("Orders created.")
 
-        # Create Order Items
-        # print("Creating order items...")
-        # item1 = OrderItem(
-        #     order_id=order1.id,
-        #     service_name="Frontend Development",
-        #     service_details="HTML, CSS, JavaScript"
-        # )
-        # item2 = OrderItem(
-        #     order_id=order2.id,
-        #     service_name="Backend Development",
-        #     service_details="Python, Flask, SQLAlchemy"
-        # )
-
-        # db.session.add_all([item1, item2])
-        # db.session.commit()
-        # print("Order items created.")
-
-        # Create Projects
+        # Create Projects (Fix: Ensure `project_description` is never `None`)
         print("Creating projects...")
-        project1 = Project(
-            project_name="E-commerce Platform",
-            project_type = "programming assistance",
-            link_url="https://example.com",
-            file_url=None
-        )
-        project2 = Project(
-            project_name="Portfolio Website",
-            project_type = "project handling",
-            link_url="https://portfolio.com",
-            file_url=None
-        )
+        projects = [
+            Project(
+                project_name="E-commerce Platform",
+                project_type="programming assistance",
+                project_description="An advanced e-commerce solution with user authentication and payments.",
+                link_url="https://example.com",
+                file_url="https://example.com/file.pdf",  # Ensure valid file_url
+                created_at=datetime.utcnow()
+            ),
+            Project(
+                project_name="Portfolio Website",
+                project_type="project handling",
+                project_description="A personal portfolio website showcasing past projects.",
+                link_url="https://portfolio.com",
+                file_url=None,  # Ensure it's explicitly set to None if optional
+                created_at=datetime.utcnow()
+            )
+        ]
 
-        db.session.add_all([project1, project2])
+        db.session.add_all(projects)
         db.session.commit()
         print("Projects created.")
 
@@ -119,6 +105,3 @@ def seed_data():
 
 if __name__ == "__main__":
     seed_data()
-
-
-

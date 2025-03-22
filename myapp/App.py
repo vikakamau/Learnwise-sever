@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 
 # Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://learnwise_83bm_user:EcLLbmj28dxHhlw1lBCEppV9YhNqbrhi@dpg-cvednjtsvqrc73f9qt1g-a.oregon-postgres.render.com/learnwise_83bm'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://learnwise_0h5s_user:2amNOFbX8dHHVvQuWu33ytJMkuz5XXnc@dpg-cveo2hjv2p9s73dorbig-a.oregon-postgres.render.com/learnwise_0h5s'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Change this to a strong secret key
 
@@ -178,7 +178,7 @@ def create_order():
             project_name=data['project_name'],
             project_description=data['project_description'],
             expected_duration=data['expected_duration'],
-            project_budget=full_budget,
+            project_budget=project_budget,
             currency=currency,
             link_url=link_url if not file_url else '',
             file_url=file_url
@@ -233,44 +233,36 @@ def delete_order(order_id):
 
 
 # ------------------ PROJECT ROUTES (NO JWT REQUIRED) ------------------
-
-
 @app.route('/projects', methods=['POST'])
 def create_project():
     data = request.form
     file = request.files.get('file')
 
-
     project_name = data.get('project_name')
     project_type = data.get('project_type')
+    project_description = data.get('project_description', '')  # Ensure it defaults to an empty string
     link_url = data.get('link_url', '')
-
 
     # Validate required fields
     if not project_name or not project_type:
         return jsonify({"error": "Project name and type are required"}), 400
 
-
     # Validate that either a file or a link is provided
     if not file and not link_url:
         return jsonify({"error": "Please provide either a file or a link"}), 400
 
+    file_url = None  # Default file_url
 
     # Validate file type if a file is uploaded
     if file:
         file_type = file.content_type
-        if file_type not in VALID_FILE_TYPES:
-            return jsonify({"error": "Invalid file type. Only PDF and DOCX files are allowed."}), 400
-
-
-        # Optionally, you can also check the file extension
         filename = secure_filename(file.filename)
         file_extension = filename.rsplit('.', 1)[-1].lower()
-        if file_extension not in VALID_FILE_TYPES.values():
-            return jsonify({"error": "Invalid file extension. Only PDF and DOCX files are allowed."}), 400
 
+        if file_type not in VALID_FILE_TYPES or file_extension not in VALID_FILE_TYPES.values():
+            return jsonify({"error": "Invalid file type. Only PDF and DOCX files are allowed."}), 400
 
-        # Proceed with file upload to Cloudinary or any other processing
+        # Upload file to Cloudinary
         try:
             upload_result = cloudinary.uploader.upload(
                 file,
@@ -281,34 +273,33 @@ def create_project():
             file_url = upload_result['secure_url']
         except Exception as e:
             return jsonify({"error": f"File upload failed: {str(e)}"}), 500
-    else:
-        file_url = None
-
 
     # Save the project to the database
     new_project = Project(
         project_name=project_name,
         project_type=project_type,
+        project_description=project_description,  # Ensuring it's never NULL
         link_url=link_url if not file_url else '',  # Only save link_url if no file is uploaded
         file_url=file_url
     )
 
-
-    db.session.add(new_project)
-    db.session.commit()
-
-
-    return jsonify({
-        "message": "Project created successfully",
-        "project": {
-            "id": new_project.id,
-            "project_name": new_project.project_name,
-            "project_type": new_project.project_type,
-            "link_url": new_project.link_url,
-            "file_url": new_project.file_url
-        }
-    }), 201
-
+    try:
+        db.session.add(new_project)
+        db.session.commit()
+        return jsonify({
+            "message": "Project created successfully",
+            "project": {
+                "id": new_project.id,
+                "project_name": new_project.project_name,
+                "project_type": new_project.project_type,
+                "project_description": new_project.project_description,
+                "link_url": new_project.link_url,
+                "file_url": new_project.file_url
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 @app.route('/projects', methods=['GET'])
 def get_projects():
