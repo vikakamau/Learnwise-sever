@@ -9,5 +9,5 @@ flask-jwt-extended
 flask-migrate
 flask-bcrypt
 gunicorn==20.1.
-psycopg2binary
+psycopg2-binary
 werkzeug
