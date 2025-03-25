@@ -4,6 +4,7 @@ from myapp import db
 from werkzeug.security import check_password_hash, generate_password_hash
 from myapp.models import Product, Category, User
 
+
 admin_bp = Blueprint('admin', __name__)
 
 # @admin_bp.route('/admin/add_product', methods=['POST'])

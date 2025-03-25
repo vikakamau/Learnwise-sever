@@ -2,30 +2,36 @@ from flask import Blueprint, request, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
-from myapp.models import User, db
+from myapp.models import User, db  # ✅ Import only User and db, NOT app
 
+# ✅ Define Blueprint first
 auth_bp = Blueprint("auth", __name__)
 
-# ✅ Apply CORS globally with credentials support
-CORS(app, resources={r"/*": {"origins": ["https://dickson4954.github.io", "http://localhost:3000"]}}, supports_credentials=True)
+# ✅ Apply CORS to allow all origins dynamically
+CORS(auth_bp, supports_credentials=True)
 
-# CORS Preflight Handling
+def get_allowed_origin():
+    """Dynamically get the allowed origin from the request."""
+    return request.headers.get("Origin", "https://dickson4954.github.io")
+
+# ✅ CORS Preflight Handling
 @auth_bp.route("/<path:path>", methods=["OPTIONS"])
 def handle_options(path):
+    """Handle preflight requests for CORS."""
     response = jsonify({"message": "CORS preflight OK"})
     response.headers.update({
-        "Access-Control-Allow-Origin": "http://localhost:3000",
+        "Access-Control-Allow-Origin": get_allowed_origin(),
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Credentials": "true"
     })
     return response
 
-# User Signup
+# ✅ User Signup
 @auth_bp.route("/signup", methods=["POST"])
 def signup():
     data = request.get_json()
-
+    
     if not data.get("username") or not data.get("email") or not data.get("password"):
         return jsonify({"message": "Missing required fields"}), 400
 
@@ -42,11 +48,10 @@ def signup():
     db.session.commit()
 
     response = jsonify({"message": "User registered successfully"})
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = get_allowed_origin()
     return response, 201
 
-
-# User Login
+# ✅ User Login
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -58,7 +63,6 @@ def login():
         (User.username == data["username"]) | (User.email == data["username"])
     ).first()
 
-    # ✅ FIX: Ensure we use `user.password_hash`, not `user.password`
     if not user or not check_password_hash(user.password_hash, data["password"]):
         return jsonify({"message": "Invalid credentials"}), 401
 
@@ -74,16 +78,11 @@ def login():
             "is_admin": user.is_admin
         }
     })
-    
-    # ✅ Fix: Ensure credentials are allowed
-    response.headers.update({
-        "Access-Control-Allow-Origin": "http://localhost:3000",
-        "Access-Control-Allow-Credentials": "true"
-    })
+    response.headers["Access-Control-Allow-Origin"] = get_allowed_origin()
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response, 200
 
-
-# Get User Profile
+# ✅ Get User Profile
 @auth_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
@@ -99,10 +98,10 @@ def get_profile():
         "email": user.email,
         "is_admin": user.is_admin
     })
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = get_allowed_origin()
     return response, 200
 
-# Update User Profile
+# ✅ Update User Profile
 @auth_bp.route("/profile", methods=["PUT"])
 @jwt_required()
 def update_profile():
@@ -122,13 +121,13 @@ def update_profile():
     db.session.commit()
 
     response = jsonify({"message": "Profile updated successfully"})
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = get_allowed_origin()
     return response, 200
 
-# User Logout
+# ✅ User Logout
 @auth_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
     response = jsonify({"message": "Logout successful, clear token on client side."})
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = get_allowed_origin()
     return response, 200
