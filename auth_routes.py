@@ -12,7 +12,7 @@ CORS(auth_bp, supports_credentials=True)
 
 def get_allowed_origin():
     """Dynamically get the allowed origin from the request."""
-    return request.headers.get("Origin", "https://dickson4954.github.io")
+    return request.headers.get("Origin", "https://learnwisee.com")
 
 # ✅ CORS Preflight Handling
 @auth_bp.route("/<path:path>", methods=["OPTIONS"])

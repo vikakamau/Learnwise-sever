@@ -44,7 +44,7 @@ VALID_FILE_TYPES = {
 
 # Initialize extensions
 db.init_app(app)
-CORS(app, resources={r"/*": {"origins": ["https://dickson4954.github.io", "http://localhost:3000"]}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": ["https://learnwisee.com", "http://localhost:3000"]}}, supports_credentials=True)
 jwt = JWTManager(app)
 migrate = Migrate(app, db)
 
